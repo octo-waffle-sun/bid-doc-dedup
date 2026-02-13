@@ -1,0 +1,107 @@
+import type { FastifyInstance } from 'fastify'
+import { z } from 'zod'
+import { createJob, getHit, getJob, getReport, listAnchors, listHits, listJobs, listPairs, upsertReview } from '../repositories/jobs.js'
+
+export const registerJobRoutes = async (app: FastifyInstance) => {
+  app.post('/api/dedup/jobs', async (request) => {
+    const schema = z.object({
+      section_id: z.string(),
+      doc_ids: z.array(z.string()),
+      mode: z.string(),
+      llm_provider_id: z.string().optional(),
+      ocr_provider_id: z.string().optional(),
+      prompt_version: z.string(),
+      options: z.record(z.string(), z.any()).optional()
+    })
+    const payload = schema.parse(request.body)
+    const jobId = await createJob({
+      sectionId: payload.section_id,
+      docIds: payload.doc_ids,
+      createdBy: '系统'
+    })
+    return { job_id: jobId, status: 'QUEUED' }
+  })
+
+  app.get('/api/dedup/jobs', async () => listJobs())
+
+  app.get('/api/dedup/jobs/:jobId', async (request) => {
+    const { jobId } = request.params as { jobId: string }
+    const job = await getJob(jobId)
+    if (!job) {
+      return { status: 'NOT_FOUND' }
+    }
+    return job
+  })
+
+  app.get('/api/dedup/jobs/:jobId/reports', async (request) => {
+    const { jobId } = request.params as { jobId: string }
+    return getReport(jobId)
+  })
+
+  app.get('/api/dedup/jobs/:jobId/pairs', async (request) => {
+    const { jobId } = request.params as { jobId: string }
+    return listPairs(jobId)
+  })
+
+  app.get('/api/dedup/reports/:reportId/summary', async () => {
+    const hits = await listHits({})
+    const high = hits.filter((hit) => hit.rewrite_risk === 'HIGH').length
+    const med = hits.filter((hit) => hit.rewrite_risk === 'MED').length
+    const low = hits.filter((hit) => hit.rewrite_risk === 'LOW').length
+    return { high, med, low, top_section: '技术方案' }
+  })
+
+  app.get('/api/dedup/reports/:reportId/hits', async (request) => {
+    const { risk, sectionType, bidder, minScore, maxScore } = request.query as {
+      risk?: string
+      sectionType?: string
+      bidder?: string
+      minScore?: string
+      maxScore?: string
+    }
+    const min = minScore ? Number(minScore) : undefined
+    const max = maxScore ? Number(maxScore) : undefined
+    return listHits({ risk, sectionType, bidder, minScore: min, maxScore: max })
+  })
+
+  app.get('/api/dedup/hits/:hitId', async (request) => {
+    const { hitId } = request.params as { hitId: string }
+    const hit = await getHit(hitId)
+    if (!hit) {
+      return { status: 'NOT_FOUND' }
+    }
+    return hit
+  })
+
+  app.get('/api/dedup/hits/:hitId/anchors', async (request) => {
+    const { hitId } = request.params as { hitId: string }
+    const hit = await getHit(hitId)
+    if (!hit) {
+      return { status: 'NOT_FOUND' }
+    }
+    const anchors = await listAnchors(hitId)
+    const host = request.headers.host ?? 'localhost:5175'
+    const protocol = (request.headers['x-forwarded-proto'] as string) ?? 'http'
+    return {
+      hit_id: hitId,
+      a_preview_url: `${protocol}://${host}/api/files/${hit.a.doc_id}/preview`,
+      b_preview_url: `${protocol}://${host}/api/files/${hit.b.doc_id}/preview`,
+      rule_hits: hit.rule_hits,
+      anchors,
+      explanation: hit.explanation,
+      score: hit.score,
+      rewrite_risk: hit.rewrite_risk
+    }
+  })
+
+  app.post('/api/dedup/hits/:hitId/review', async (request) => {
+    const { hitId } = request.params as { hitId: string }
+    const schema = z.object({
+      result: z.enum(['CONFIRMED', 'FALSE_POSITIVE', 'PENDING']),
+      remark: z.string().optional()
+    })
+    const payload = schema.parse(request.body)
+    const review = await upsertReview(hitId, payload)
+    return { status: 'OK', hit_id: hitId, review: { result: review.result, remark: review.remark ?? undefined } }
+  })
+}

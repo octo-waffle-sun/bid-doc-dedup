@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Section {
+  id        String   @id
+  name      String
+  code      String
+  openedAt  String
+  createdAt String
+  docs      Doc[]
+  jobs      Job[]
+}
+
+model Doc {
+  id          String   @id
+  sectionId   String
+  bidder      String
+  filename    String
+  fileType    String
+  scanned     Boolean
+  status      String
+  uploadedAt  String
+  storagePath String?
+  createdAt   String
+  section     Section  @relation(fields: [sectionId], references: [id])
+  hitsAsA     Hit[]    @relation("HitDocA")
+  hitsAsB     Hit[]    @relation("HitDocB")
+}
+
+model Job {
+  id            String   @id
+  sectionId     String
+  status        String
+  progress      Int
+  stage         String
+  parseProgress Int
+  llmProgress   Int
+  reportProgress Int
+  createdBy     String
+  createdAt     String
+  startedAt     String?
+  finishedAt    String?
+  error         String?
+  section       Section  @relation(fields: [sectionId], references: [id])
+  pairs         Pair[]
+  hits          Hit[]
+}
+
+model Pair {
+  id     String @id
+  jobId  String
+  docA   String
+  docB   String
+  score  Int
+  hits   Int
+  status String
+  job    Job    @relation(fields: [jobId], references: [id])
+}
+
+model Hit {
+  id          String   @id
+  jobId       String
+  aDocId      String
+  bDocId      String
+  score       Int
+  rewriteRisk String
+  ruleHits    Json
+  sectionType String
+  explanation String
+  aBidder     String
+  aPage       Int
+  aSnippet    String
+  bBidder     String
+  bPage       Int
+  bSnippet    String
+  createdAt   String
+  job         Job      @relation(fields: [jobId], references: [id])
+  aDoc        Doc      @relation("HitDocA", fields: [aDocId], references: [id])
+  bDoc        Doc      @relation("HitDocB", fields: [bDocId], references: [id])
+  anchors     Anchor[]
+  review      HitReview?
+}
+
+model Anchor {
+  id        String @id
+  hitId     String
+  aPage     Int
+  bPage     Int
+  aBboxList Json
+  bBboxList Json
+  aSnippet  String
+  bSnippet  String
+  hit       Hit    @relation(fields: [hitId], references: [id])
+}
+
+model HitReview {
+  id         String @id
+  hitId      String @unique
+  result     String
+  remark     String?
+  reviewedAt String
+  hit        Hit    @relation(fields: [hitId], references: [id])
+}
+
+model Provider {
+  id              String @id
+  type            String
+  name            String
+  model           String
+  qps             Int
+  enabled         Boolean
+  baseUrl         String?
+  apiKeyEncrypted String?
+  createdAt       String
+}
+
+model Prompt {
+  id            String @id
+  type          String
+  promptVersion String
+  content       String?
+  updatedAt     String
+  updatedBy     String
+}
+
+model Rule {
+  id        String @id
+  name      String
+  threshold Float
+  level     String
+  enabled   Boolean
+  createdAt String
+}
+
+model AuditLog {
+  id        String @id
+  provider  String
+  purpose   String
+  latency   Int
+  status    String
+  createdAt String
+}
+
+model InvokeLog {
+  id              String @id
+  jobId           String?
+  providerId      String?
+  stage           String
+  requestMetaJson Json?
+  responseMetaJson Json?
+  tokens          Int?
+  latencyMs       Int?
+  status          String
+  error           String?
+  createdAt       String
+}
