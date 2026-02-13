@@ -1,6 +1,6 @@
 import { prisma } from '../db.js'
 
-export const listJobs = async () => {
+export const listJobs = async (sectionId?: string) => {
   const jobs: {
     id: string
     sectionId: string
@@ -10,8 +10,35 @@ export const listJobs = async () => {
     createdAt: string
     section: { name: string }
   }[] = await prisma.job.findMany({
-    include: { section: true }
+    include: { section: true },
+    where: sectionId ? { sectionId } : undefined,
+    orderBy: { createdAt: 'desc' }
   })
+  const jobIds = jobs.map((job) => job.id)
+  const jobDocRows: { jobId: string }[] = await prisma.jobDoc.findMany({
+    where: { jobId: { in: jobIds } },
+    select: { jobId: true }
+  })
+  const pairRows: { jobId: string }[] = await prisma.pair.findMany({
+    where: { jobId: { in: jobIds } },
+    select: { jobId: true }
+  })
+  const hitRows: { jobId: string }[] = await prisma.hit.findMany({
+    where: { jobId: { in: jobIds } },
+    select: { jobId: true }
+  })
+  const docCountMap = new Map<string, number>()
+  const pairCountMap = new Map<string, number>()
+  const hitCountMap = new Map<string, number>()
+  for (const row of jobDocRows) {
+    docCountMap.set(row.jobId, (docCountMap.get(row.jobId) ?? 0) + 1)
+  }
+  for (const row of pairRows) {
+    pairCountMap.set(row.jobId, (pairCountMap.get(row.jobId) ?? 0) + 1)
+  }
+  for (const row of hitRows) {
+    hitCountMap.set(row.jobId, (hitCountMap.get(row.jobId) ?? 0) + 1)
+  }
   return jobs.map((job) => ({
     job_id: job.id,
     section_id: job.sectionId,
@@ -19,7 +46,10 @@ export const listJobs = async () => {
     status: job.status,
     progress: job.progress,
     created_by: job.createdBy,
-    created_at: job.createdAt
+    created_at: job.createdAt,
+    doc_count: docCountMap.get(job.id) ?? 0,
+    pair_count: pairCountMap.get(job.id) ?? 0,
+    hit_count: hitCountMap.get(job.id) ?? 0
   }))
 }
 
@@ -45,6 +75,19 @@ export const createJob = async (payload: {
 }) => {
   const now = new Date().toISOString()
   const jobId = `job-${Date.now()}`
+  const section = await prisma.section.findUnique({ where: { id: payload.sectionId } })
+  if (!section) {
+    return { status: 'SECTION_NOT_FOUND' as const }
+  }
+  const docs: { id: string; bidder: string }[] = await prisma.doc.findMany({
+    where: { id: { in: payload.docIds }, sectionId: payload.sectionId }
+  })
+  if (docs.length !== payload.docIds.length) {
+    return { status: 'INVALID_DOCS' as const }
+  }
+  if (docs.length < 2) {
+    return { status: 'NOT_ENOUGH_DOCS' as const }
+  }
   await prisma.job.create({
     data: {
       id: jobId,
@@ -59,9 +102,13 @@ export const createJob = async (payload: {
       createdAt: now
     }
   })
-
-  const docs = await prisma.doc.findMany({
-    where: { id: { in: payload.docIds } }
+  await prisma.jobDoc.createMany({
+    data: docs.map((doc: { id: string }) => ({
+      id: `jobdoc-${jobId}-${doc.id}`,
+      jobId,
+      docId: doc.id,
+      createdAt: now
+    }))
   })
   const pairs: { id: string; jobId: string; docA: string; docB: string; score: number; hits: number; status: string }[] = []
   for (let i = 0; i < docs.length; i += 1) {
@@ -82,7 +129,7 @@ export const createJob = async (payload: {
   if (pairs.length > 0) {
     await prisma.pair.createMany({ data: pairs })
   }
-  return jobId
+  return { status: 'OK' as const, jobId }
 }
 
 export const listPairs = async (jobId: string) => {
@@ -104,13 +151,23 @@ export const getReport = async (jobId: string) => ({
   status: 'SUCCESS'
 })
 
-export const listHits = async (filters: {
+export const listJobHits = async (jobId: string, filters: {
   risk?: string
   sectionType?: string
   bidder?: string
+  docId?: string
   minScore?: number
   maxScore?: number
 }) => {
+  const andFilters: {
+    OR: { aDocId?: string; bDocId?: string; aBidder?: { contains: string }; bBidder?: { contains: string } }[]
+  }[] = []
+  if (filters.docId) {
+    andFilters.push({ OR: [{ aDocId: filters.docId }, { bDocId: filters.docId }] })
+  }
+  if (filters.bidder) {
+    andFilters.push({ OR: [{ aBidder: { contains: filters.bidder } }, { bBidder: { contains: filters.bidder } }] })
+  }
   const hits: {
     id: string
     aDocId: string
@@ -128,19 +185,23 @@ export const listHits = async (filters: {
     bSnippet: string
     review: { result: string; remark: string | null; reviewedAt: string } | null
   }[] = await prisma.hit.findMany({
-    include: { review: true }
-  })
-  const filtered = hits.filter((hit) => {
-    if (filters.risk && hit.rewriteRisk !== filters.risk) return false
-    if (filters.sectionType && hit.sectionType !== filters.sectionType) return false
-    if (filters.bidder && !hit.aBidder.includes(filters.bidder) && !hit.bBidder.includes(filters.bidder)) {
-      return false
+    include: { review: true },
+    where: {
+      jobId,
+      rewriteRisk: filters.risk,
+      sectionType: filters.sectionType,
+      ...(andFilters.length > 0 ? { AND: andFilters } : undefined),
+      ...(typeof filters.minScore === 'number' || typeof filters.maxScore === 'number'
+        ? {
+            score: {
+              ...(typeof filters.minScore === 'number' ? { gte: filters.minScore } : undefined),
+              ...(typeof filters.maxScore === 'number' ? { lte: filters.maxScore } : undefined)
+            }
+          }
+        : undefined)
     }
-    if (typeof filters.minScore === 'number' && hit.score < filters.minScore) return false
-    if (typeof filters.maxScore === 'number' && hit.score > filters.maxScore) return false
-    return true
   })
-  return filtered.map((hit) => ({
+  return hits.map((hit) => ({
     hit_id: hit.id,
     score: hit.score,
     rewrite_risk: hit.rewriteRisk,
@@ -237,4 +298,35 @@ export const upsertReview = async (hitId: string, payload: { result: string; rem
     }
   })
   return review
+}
+
+export const listJobDocs = async (jobId: string) => {
+  const records: { doc: { id: string; bidder: string; filename: string; fileType: string } }[] =
+    await prisma.jobDoc.findMany({
+    where: { jobId },
+    include: { doc: true }
+  })
+  return records.map((record: { doc: { id: string; bidder: string; filename: string; fileType: string } }) => record.doc)
+}
+
+export const failJob = async (jobId: string, error: string) => {
+  const now = new Date().toISOString()
+  await prisma.job.update({
+    where: { id: jobId },
+    data: { status: 'FAILED', stage: 'FAILED', error, finishedAt: now }
+  })
+}
+
+export const updatePairStats = async (jobId: string, stats: Map<string, { score: number; hits: number }>) => {
+  const pairs = await prisma.pair.findMany({ where: { jobId } })
+  for (const pair of pairs) {
+    const key = `${pair.docA}::${pair.docB}`
+    const payload = stats.get(key)
+    if (payload) {
+      await prisma.pair.update({
+        where: { id: pair.id },
+        data: { status: 'SUCCESS', score: payload.score, hits: payload.hits }
+      })
+    }
+  }
 }

@@ -80,12 +80,12 @@ export const registerFileRoutes = async (app: FastifyInstance) => {
       return { status: 'NOT_FOUND' }
     }
     ensureStorageRoot()
-    if (!hasDocFile(docId)) {
+    if (!hasDocFile(docId, doc.storagePath)) {
       reply.code(404)
       return { status: 'FILE_NOT_FOUND' }
     }
     reply.type('application/pdf')
-    return reply.send(streamDocFile(docId))
+    return reply.send(streamDocFile(docId, doc.storagePath))
   })
 
   app.get('/api/docs/:docId/pages/:pageNo', async (request) => {

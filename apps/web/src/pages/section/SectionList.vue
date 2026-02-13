@@ -7,7 +7,7 @@ type SectionItem = {
   id: string
   name: string
   code: string
-  bidderCount: number
+  docCount: number
   openedAt: string
 }
 
@@ -28,7 +28,7 @@ const loadSections = async () => {
       id: item.section_id,
       name: item.name,
       code: item.code,
-      bidderCount: item.bidder_count,
+      docCount: item.doc_count,
       openedAt: item.opened_at
     }))
   } finally {
@@ -60,7 +60,7 @@ onMounted(loadSections)
       <el-table :data="filteredSections" style="width: 100%" v-loading="loading">
         <el-table-column prop="code" label="标段编号" width="160" />
         <el-table-column prop="name" label="标段名称" min-width="200" />
-        <el-table-column prop="bidderCount" label="投标文件数" width="120" />
+        <el-table-column prop="docCount" label="投标文件数" width="120" />
         <el-table-column prop="openedAt" label="开标时间" width="180" />
         <el-table-column label="操作" width="160">
           <template #default="{ row }">

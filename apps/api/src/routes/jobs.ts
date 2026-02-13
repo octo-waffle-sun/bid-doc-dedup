@@ -1,9 +1,9 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { createJob, getHit, getJob, getReport, listAnchors, listHits, listJobs, listPairs, upsertReview } from '../repositories/jobs.js'
+import { createJob, getHit, getJob, getReport, listAnchors, listJobHits, listJobs, listPairs, upsertReview } from '../repositories/jobs.js'
 
 export const registerJobRoutes = async (app: FastifyInstance) => {
-  app.post('/api/dedup/jobs', async (request) => {
+  app.post('/api/dedup/jobs', async (request, reply) => {
     const schema = z.object({
       section_id: z.string(),
       doc_ids: z.array(z.string()),
@@ -14,15 +14,26 @@ export const registerJobRoutes = async (app: FastifyInstance) => {
       options: z.record(z.string(), z.any()).optional()
     })
     const payload = schema.parse(request.body)
-    const jobId = await createJob({
+    const result = await createJob({
       sectionId: payload.section_id,
       docIds: payload.doc_ids,
       createdBy: '系统'
     })
-    return { job_id: jobId, status: 'QUEUED' }
+    if (result.status !== 'OK') {
+      if (result.status === 'SECTION_NOT_FOUND') {
+        reply.code(404)
+      } else {
+        reply.code(409)
+      }
+      return { status: result.status }
+    }
+    return { job_id: result.jobId, status: 'QUEUED' }
   })
 
-  app.get('/api/dedup/jobs', async () => listJobs())
+  app.get('/api/dedup/jobs', async (request) => {
+    const { section_id } = request.query as { section_id?: string }
+    return listJobs(section_id)
+  })
 
   app.get('/api/dedup/jobs/:jobId', async (request) => {
     const { jobId } = request.params as { jobId: string }
@@ -43,12 +54,28 @@ export const registerJobRoutes = async (app: FastifyInstance) => {
     return listPairs(jobId)
   })
 
-  app.get('/api/dedup/reports/:reportId/summary', async () => {
-    const hits = await listHits({})
+  app.get('/api/dedup/jobs/:jobId/summary', async (request) => {
+    const { jobId } = request.params as { jobId: string }
+    const hits = await listJobHits(jobId, {})
     const high = hits.filter((hit) => hit.rewrite_risk === 'HIGH').length
     const med = hits.filter((hit) => hit.rewrite_risk === 'MED').length
     const low = hits.filter((hit) => hit.rewrite_risk === 'LOW').length
     return { high, med, low, top_section: '技术方案' }
+  })
+
+  app.get('/api/dedup/jobs/:jobId/hits', async (request) => {
+    const { jobId } = request.params as { jobId: string }
+    const { risk, sectionType, bidder, minScore, maxScore, docId } = request.query as {
+      risk?: string
+      sectionType?: string
+      bidder?: string
+      minScore?: string
+      maxScore?: string
+      docId?: string
+    }
+    const min = minScore ? Number(minScore) : undefined
+    const max = maxScore ? Number(maxScore) : undefined
+    return { job_id: jobId, items: await listJobHits(jobId, { risk, sectionType, bidder, docId, minScore: min, maxScore: max }) }
   })
 
   app.get('/api/dedup/reports/:reportId/hits', async (request) => {
@@ -59,9 +86,21 @@ export const registerJobRoutes = async (app: FastifyInstance) => {
       minScore?: string
       maxScore?: string
     }
+    const { reportId } = request.params as { reportId: string }
+    const jobId = reportId.startsWith('report-') ? reportId.replace('report-', '') : reportId
     const min = minScore ? Number(minScore) : undefined
     const max = maxScore ? Number(maxScore) : undefined
-    return listHits({ risk, sectionType, bidder, minScore: min, maxScore: max })
+    return listJobHits(jobId, { risk, sectionType, bidder, minScore: min, maxScore: max })
+  })
+
+  app.get('/api/dedup/reports/:reportId/summary', async (request) => {
+    const { reportId } = request.params as { reportId: string }
+    const jobId = reportId.startsWith('report-') ? reportId.replace('report-', '') : reportId
+    const hits = await listJobHits(jobId, {})
+    const high = hits.filter((hit) => hit.rewrite_risk === 'HIGH').length
+    const med = hits.filter((hit) => hit.rewrite_risk === 'MED').length
+    const low = hits.filter((hit) => hit.rewrite_risk === 'LOW').length
+    return { high, med, low, top_section: '技术方案' }
   })
 
   app.get('/api/dedup/hits/:hitId', async (request) => {

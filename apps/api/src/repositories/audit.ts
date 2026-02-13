@@ -13,6 +13,29 @@ export const listAuditLogs = async () => {
   }))
 }
 
+export const listInvokeLogs = async () => {
+  const logs: {
+    id: string
+    jobId: string | null
+    providerId: string | null
+    stage: string
+    status: string
+    latencyMs: number | null
+    error: string | null
+    createdAt: string
+  }[] = await prisma.invokeLog.findMany()
+  return logs.map((log) => ({
+    id: log.id,
+    job_id: log.jobId ?? undefined,
+    provider_id: log.providerId ?? undefined,
+    stage: log.stage,
+    status: log.status,
+    latency_ms: log.latencyMs ?? undefined,
+    error: log.error ?? undefined,
+    created_at: log.createdAt
+  }))
+}
+
 export const createInvokeLog = async (payload: {
   jobId?: string
   providerId?: string

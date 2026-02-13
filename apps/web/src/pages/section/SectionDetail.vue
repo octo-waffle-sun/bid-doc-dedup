@@ -63,6 +63,10 @@ const startDedup = async () => {
       prompt_version: 'v1.0',
       options: { ocr: 'AUTO' }
     })
+    if (data.status && data.status !== 'QUEUED') {
+      jobStatus.value = `创建失败：${data.status}`
+      return
+    }
     jobStatus.value = `已创建任务：${data.job_id}`
     router.push(`/dedup/jobs/${data.job_id}`)
   } finally {

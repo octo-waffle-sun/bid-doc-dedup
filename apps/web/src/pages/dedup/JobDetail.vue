@@ -52,9 +52,8 @@ const loadJob = async () => {
   }
 }
 
-const goReport = async () => {
-  const { data } = await http.get(`/dedup/jobs/${jobId.value}/reports`)
-  router.push(`/dedup/reports/${data.report_id}`)
+const goReport = () => {
+  router.push(`/dedup/jobs/${jobId.value}/report`)
 }
 
 onMounted(loadJob)

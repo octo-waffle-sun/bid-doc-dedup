@@ -8,6 +8,9 @@ type JobItem = {
   section: string
   status: string
   progress: number
+  docCount: number
+  pairCount: number
+  hitCount: number
   createdBy: string
   createdAt: string
 }
@@ -22,19 +25,22 @@ const goDetail = (jobId: string) => {
   router.push(`/dedup/jobs/${jobId}`)
 }
 
-const goReport = () => {
-  router.push('/dedup/reports/report-001')
+const goReport = (jobId: string) => {
+  router.push(`/dedup/jobs/${jobId}/report`)
 }
 
 const loadJobs = async () => {
   loading.value = true
   try {
     const { data } = await http.get('/dedup/jobs')
-    jobs.value = (data as any[]).map((item) => ({
+    jobs.value = (data as any[]).map((item: any) => ({
       id: item.job_id,
       section: item.section_name,
       status: item.status,
       progress: item.progress,
+      docCount: item.doc_count,
+      pairCount: item.pair_count,
+      hitCount: item.hit_count,
       createdBy: item.created_by,
       createdAt: item.created_at
     }))
@@ -77,12 +83,15 @@ onMounted(loadJobs)
             <el-progress :percentage="row.progress" :stroke-width="8" />
           </template>
         </el-table-column>
+        <el-table-column prop="docCount" label="文件数" width="100" />
+        <el-table-column prop="pairCount" label="Pair数" width="100" />
+        <el-table-column prop="hitCount" label="命中数" width="100" />
         <el-table-column prop="createdBy" label="发起人" width="140" />
         <el-table-column prop="createdAt" label="发起时间" width="180" />
         <el-table-column label="操作" width="160">
           <template #default="{ row }">
             <el-button link type="primary" @click="goDetail(row.id)">查看详情</el-button>
-            <el-button link @click="goReport">报告</el-button>
+            <el-button link @click="goReport(row.id)">报告</el-button>
           </template>
         </el-table-column>
       </el-table>

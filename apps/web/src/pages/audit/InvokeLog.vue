@@ -19,7 +19,7 @@ const loading = ref(false)
 const loadLogs = async () => {
   loading.value = true
   try {
-    const { data } = await http.get('/audit/invoke-logs')
+    const { data } = await http.get('/audit/logs')
     logs.value = (data as any[]).map((item) => ({
       id: item.id,
       provider: item.provider,

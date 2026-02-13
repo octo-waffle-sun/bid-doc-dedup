@@ -12,9 +12,14 @@ export const ensureStorageRoot = () => {
 
 export const getDocStoragePath = (docId: string) => path.join(storageRoot, docId, 'original.pdf')
 
-export const hasDocFile = (docId: string) => fs.existsSync(getDocStoragePath(docId))
+export const resolveDocPath = (docId: string, storagePath?: string | null) =>
+  storagePath ?? getDocStoragePath(docId)
 
-export const streamDocFile = (docId: string) => fs.createReadStream(getDocStoragePath(docId))
+export const hasDocFile = (docId: string, storagePath?: string | null) =>
+  fs.existsSync(resolveDocPath(docId, storagePath))
+
+export const streamDocFile = (docId: string, storagePath?: string | null) =>
+  fs.createReadStream(resolveDocPath(docId, storagePath))
 
 export const ensureDocStorage = (docId: string) => {
   ensureStorageRoot()

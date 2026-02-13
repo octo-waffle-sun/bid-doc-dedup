@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { http } from '../../api/http'
 
 type ReviewInfo = {
@@ -30,7 +30,9 @@ const bidderFilter = ref('')
 const minScore = ref<number | null>(null)
 const maxScore = ref<number | null>(null)
 
+const route = useRoute()
 const router = useRouter()
+const jobId = computed(() => route.params.jobId as string)
 const goCompare = (hitId: string) => {
   router.push(`/dedup/compare/${hitId}`)
 }
@@ -38,7 +40,7 @@ const goCompare = (hitId: string) => {
 const loadHits = async () => {
   loading.value = true
   try {
-    const { data } = await http.get('/dedup/reports/report-001/hits', {
+    const { data } = await http.get(`/dedup/jobs/${jobId.value}/hits`, {
       params: {
         risk: riskFilter.value || undefined,
         sectionType: sectionFilter.value || undefined,
@@ -47,7 +49,7 @@ const loadHits = async () => {
         maxScore: maxScore.value ?? undefined
       }
     })
-    hits.value = (data as any[]).map((item) => ({
+    hits.value = ((data as any).items || []).map((item: any) => ({
       id: item.hit_id,
       score: item.score,
       ruleHits: item.rule_hits || [],
@@ -64,7 +66,7 @@ const loadHits = async () => {
 }
 
 const loadSummary = async () => {
-  const { data } = await http.get('/dedup/reports/report-001/summary')
+  const { data } = await http.get(`/dedup/jobs/${jobId.value}/summary`)
   summary.value = data
 }
 

@@ -31,6 +31,7 @@ model Doc {
   section     Section  @relation(fields: [sectionId], references: [id])
   hitsAsA     Hit[]    @relation("HitDocA")
   hitsAsB     Hit[]    @relation("HitDocB")
+  jobDocs     JobDoc[]
 }
 
 model Job {
@@ -50,6 +51,7 @@ model Job {
   section       Section  @relation(fields: [sectionId], references: [id])
   pairs         Pair[]
   hits          Hit[]
+  jobDocs       JobDoc[]
 }
 
 model Pair {
@@ -61,6 +63,16 @@ model Pair {
   hits   Int
   status String
   job    Job    @relation(fields: [jobId], references: [id])
+}
+
+model JobDoc {
+  id        String @id
+  jobId     String
+  docId     String
+  createdAt String
+  job       Job    @relation(fields: [jobId], references: [id])
+  doc       Doc    @relation(fields: [docId], references: [id])
+  @@unique([jobId, docId])
 }
 
 model Hit {

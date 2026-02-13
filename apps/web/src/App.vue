@@ -10,7 +10,7 @@ const activePath = computed(() => route.path)
 const menuItems = [
   { label: '标段列表', path: '/sections' },
   { label: '任务中心', path: '/dedup/jobs' },
-  { label: '报告概览', path: '/dedup/reports/demo' },
+  { label: '报告概览', path: '/dedup/jobs' },
   { label: '模型配置', path: '/config/providers' },
   { label: '审计日志', path: '/audit/invoke-log' }
 ]

@@ -17,7 +17,7 @@ export const listSections = async () => {
     name: section.name,
     code: section.code,
     opened_at: section.openedAt,
-    bidder_count: map.get(section.id) ?? 0
+    doc_count: map.get(section.id) ?? 0
   }))
 }
 
