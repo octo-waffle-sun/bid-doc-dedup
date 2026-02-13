@@ -1,5 +1,6 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
+import multipart from '@fastify/multipart'
 import { ensureSeedData } from './db.js'
 import { registerAuditRoutes } from './routes/audit.js'
 import { registerConfigRoutes } from './routes/config.js'
@@ -10,6 +11,7 @@ import { registerSectionRoutes } from './routes/sections.js'
 const app = Fastify({ logger: true })
 
 await app.register(cors, { origin: true })
+await app.register(multipart)
 
 app.get('/api/health', async () => ({ status: 'ok' }))
 

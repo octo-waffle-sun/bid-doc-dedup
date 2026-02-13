@@ -57,6 +57,59 @@ export const listSectionDocs = async (sectionId: string) => {
   )
 }
 
+export const createSection = async (payload: { name: string; code: string; openedAt: string }) => {
+  const section = await prisma.section.create({
+    data: {
+      id: `sec-${Date.now()}`,
+      name: payload.name,
+      code: payload.code,
+      openedAt: payload.openedAt,
+      createdAt: new Date().toISOString()
+    }
+  })
+  return {
+    section_id: section.id,
+    name: section.name,
+    code: section.code,
+    opened_at: section.openedAt,
+    doc_count: 0
+  }
+}
+
+export const updateSection = async (
+  sectionId: string,
+  payload: { name?: string; code?: string; openedAt?: string }
+) => {
+  const data: { name?: string; code?: string; openedAt?: string } = {}
+  if (payload.name !== undefined) data.name = payload.name
+  if (payload.code !== undefined) data.code = payload.code
+  if (payload.openedAt !== undefined) data.openedAt = payload.openedAt
+  const section = await prisma.section.update({
+    where: { id: sectionId },
+    data
+  })
+  const docCount = await prisma.doc.count({ where: { sectionId } })
+  return {
+    section_id: section.id,
+    name: section.name,
+    code: section.code,
+    opened_at: section.openedAt,
+    doc_count: docCount
+  }
+}
+
+export const deleteSection = async (sectionId: string) => {
+  const docCount = await prisma.doc.count({ where: { sectionId } })
+  const jobCount = await prisma.job.count({ where: { sectionId } })
+  if (docCount > 0 || jobCount > 0) {
+    return { status: 'NOT_ALLOWED', reason: 'SECTION_HAS_DATA' }
+  }
+  const existing = await prisma.section.findUnique({ where: { id: sectionId } })
+  if (!existing) return null
+  await prisma.section.delete({ where: { id: sectionId } })
+  return { status: 'DELETED', section_id: sectionId }
+}
+
 export const createDoc = async (payload: {
   sectionId: string
   bidder: string
