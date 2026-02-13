@@ -27,8 +27,12 @@ const summary = ref({ high: 0, med: 0, low: 0, top_section: '-' })
 const riskFilter = ref('')
 const sectionFilter = ref('')
 const bidderFilter = ref('')
+const keywordFilter = ref('')
 const minScore = ref<number | null>(null)
 const maxScore = ref<number | null>(null)
+const page = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
 
 const route = useRoute()
 const router = useRouter()
@@ -45,8 +49,11 @@ const loadHits = async () => {
         risk: riskFilter.value || undefined,
         sectionType: sectionFilter.value || undefined,
         bidder: bidderFilter.value || undefined,
+        q: keywordFilter.value || undefined,
         minScore: minScore.value ?? undefined,
-        maxScore: maxScore.value ?? undefined
+        maxScore: maxScore.value ?? undefined,
+        page: page.value,
+        page_size: pageSize.value
       }
     })
     hits.value = ((data as any).items || []).map((item: any) => ({
@@ -60,6 +67,9 @@ const loadHits = async () => {
       snippet: item.a.snippet,
       review: item.review
     }))
+    total.value = data.total ?? 0
+    page.value = data.page ?? page.value
+    pageSize.value = data.page_size ?? pageSize.value
   } finally {
     loading.value = false
   }
@@ -73,7 +83,12 @@ const loadSummary = async () => {
 onMounted(loadHits)
 onMounted(loadSummary)
 
-watch([riskFilter, sectionFilter, bidderFilter, minScore, maxScore], loadHits)
+watch([riskFilter, sectionFilter, bidderFilter, keywordFilter, minScore, maxScore], () => {
+  page.value = 1
+  loadHits()
+})
+
+watch([page, pageSize], loadHits)
 </script>
 
 <template>
@@ -113,6 +128,7 @@ watch([riskFilter, sectionFilter, bidderFilter, minScore, maxScore], loadHits)
           <el-option label="附件" value="ATTACH" />
         </el-select>
         <el-input v-model="bidderFilter" placeholder="投标人A/B" clearable />
+        <el-input v-model="keywordFilter" placeholder="关键词" clearable />
         <el-input-number v-model="minScore" :min="0" :max="100" placeholder="最低分" />
         <el-input-number v-model="maxScore" :min="0" :max="100" placeholder="最高分" />
       </div>
@@ -143,6 +159,15 @@ watch([riskFilter, sectionFilter, bidderFilter, minScore, maxScore], loadHits)
           </template>
         </el-table-column>
       </el-table>
+      <div class="pagination">
+        <el-pagination
+          v-model:current-page="page"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next"
+          :total="total"
+        />
+      </div>
     </el-card>
   </div>
 </template>
@@ -193,5 +218,11 @@ watch([riskFilter, sectionFilter, bidderFilter, minScore, maxScore], loadHits)
 .pending {
   color: #94a3b8;
   font-size: 12px;
+}
+
+.pagination {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
 }
 </style>

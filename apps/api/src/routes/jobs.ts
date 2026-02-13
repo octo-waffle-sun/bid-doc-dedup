@@ -1,6 +1,18 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { createJob, getHit, getJob, getReport, listAnchors, listJobHits, listJobs, listPairs, upsertReview } from '../repositories/jobs.js'
+import {
+  createJob,
+  getHit,
+  getJob,
+  getJobHit,
+  getJobHitSummary,
+  getReport,
+  listAnchors,
+  listJobHits,
+  listJobs,
+  listPairs,
+  upsertReview
+} from '../repositories/jobs.js'
 
 export const registerJobRoutes = async (app: FastifyInstance) => {
   app.post('/api/dedup/jobs', async (request, reply) => {
@@ -56,51 +68,86 @@ export const registerJobRoutes = async (app: FastifyInstance) => {
 
   app.get('/api/dedup/jobs/:jobId/summary', async (request) => {
     const { jobId } = request.params as { jobId: string }
-    const hits = await listJobHits(jobId, {})
-    const high = hits.filter((hit) => hit.rewrite_risk === 'HIGH').length
-    const med = hits.filter((hit) => hit.rewrite_risk === 'MED').length
-    const low = hits.filter((hit) => hit.rewrite_risk === 'LOW').length
-    return { high, med, low, top_section: '技术方案' }
+    return getJobHitSummary(jobId)
   })
 
   app.get('/api/dedup/jobs/:jobId/hits', async (request) => {
     const { jobId } = request.params as { jobId: string }
-    const { risk, sectionType, bidder, minScore, maxScore, docId } = request.query as {
+    const { risk, severity, sectionType, bidder, minScore, maxScore, docId, doc_id, q, page, page_size } = request.query as {
       risk?: string
+      severity?: string
       sectionType?: string
       bidder?: string
       minScore?: string
       maxScore?: string
       docId?: string
+      doc_id?: string
+      q?: string
+      page?: string
+      page_size?: string
     }
     const min = minScore ? Number(minScore) : undefined
     const max = maxScore ? Number(maxScore) : undefined
-    return { job_id: jobId, items: await listJobHits(jobId, { risk, sectionType, bidder, docId, minScore: min, maxScore: max }) }
+    const data = await listJobHits(jobId, {
+      risk,
+      severity,
+      sectionType,
+      bidder,
+      docId: doc_id ?? docId,
+      minScore: min,
+      maxScore: max,
+      q,
+      page: page ? Number(page) : undefined,
+      pageSize: page_size ? Number(page_size) : undefined
+    })
+    return { job_id: jobId, ...data }
+  })
+
+  app.get('/api/dedup/jobs/:jobId/hits/:hitId', async (request) => {
+    const { jobId, hitId } = request.params as { jobId: string; hitId: string }
+    const hit = await getJobHit(jobId, hitId)
+    if (!hit) {
+      return { status: 'NOT_FOUND' }
+    }
+    return hit
   })
 
   app.get('/api/dedup/reports/:reportId/hits', async (request) => {
-    const { risk, sectionType, bidder, minScore, maxScore } = request.query as {
+    const { risk, severity, sectionType, bidder, minScore, maxScore, docId, doc_id, q, page, page_size } = request.query as {
       risk?: string
+      severity?: string
       sectionType?: string
       bidder?: string
       minScore?: string
       maxScore?: string
+      docId?: string
+      doc_id?: string
+      q?: string
+      page?: string
+      page_size?: string
     }
     const { reportId } = request.params as { reportId: string }
     const jobId = reportId.startsWith('report-') ? reportId.replace('report-', '') : reportId
     const min = minScore ? Number(minScore) : undefined
     const max = maxScore ? Number(maxScore) : undefined
-    return listJobHits(jobId, { risk, sectionType, bidder, minScore: min, maxScore: max })
+    return listJobHits(jobId, {
+      risk,
+      severity,
+      sectionType,
+      bidder,
+      docId: doc_id ?? docId,
+      minScore: min,
+      maxScore: max,
+      q,
+      page: page ? Number(page) : undefined,
+      pageSize: page_size ? Number(page_size) : undefined
+    })
   })
 
   app.get('/api/dedup/reports/:reportId/summary', async (request) => {
     const { reportId } = request.params as { reportId: string }
     const jobId = reportId.startsWith('report-') ? reportId.replace('report-', '') : reportId
-    const hits = await listJobHits(jobId, {})
-    const high = hits.filter((hit) => hit.rewrite_risk === 'HIGH').length
-    const med = hits.filter((hit) => hit.rewrite_risk === 'MED').length
-    const low = hits.filter((hit) => hit.rewrite_risk === 'LOW').length
-    return { high, med, low, top_section: '技术方案' }
+    return getJobHitSummary(jobId)
   })
 
   app.get('/api/dedup/hits/:hitId', async (request) => {

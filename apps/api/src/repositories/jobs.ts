@@ -151,16 +151,29 @@ export const getReport = async (jobId: string) => ({
   status: 'SUCCESS'
 })
 
-export const listJobHits = async (jobId: string, filters: {
-  risk?: string
-  sectionType?: string
-  bidder?: string
-  docId?: string
-  minScore?: number
-  maxScore?: number
-}) => {
+const buildHitWhere = (
+  jobId: string,
+  filters: {
+    risk?: string
+    severity?: string
+    sectionType?: string
+    bidder?: string
+    docId?: string
+    minScore?: number
+    maxScore?: number
+    q?: string
+  }
+) => {
   const andFilters: {
-    OR: { aDocId?: string; bDocId?: string; aBidder?: { contains: string }; bBidder?: { contains: string } }[]
+    OR: {
+      aDocId?: string
+      bDocId?: string
+      aBidder?: { contains: string }
+      bBidder?: { contains: string }
+      aSnippet?: { contains: string }
+      bSnippet?: { contains: string }
+      id?: { contains: string }
+    }[]
   }[] = []
   if (filters.docId) {
     andFilters.push({ OR: [{ aDocId: filters.docId }, { bDocId: filters.docId }] })
@@ -168,40 +181,120 @@ export const listJobHits = async (jobId: string, filters: {
   if (filters.bidder) {
     andFilters.push({ OR: [{ aBidder: { contains: filters.bidder } }, { bBidder: { contains: filters.bidder } }] })
   }
-  const hits: {
-    id: string
-    aDocId: string
-    bDocId: string
-    score: number
-    rewriteRisk: string
-    ruleHits: unknown
-    sectionType: string
-    explanation: string
-    aBidder: string
-    aPage: number
-    aSnippet: string
-    bBidder: string
-    bPage: number
-    bSnippet: string
-    review: { result: string; remark: string | null; reviewedAt: string } | null
-  }[] = await prisma.hit.findMany({
-    include: { review: true },
-    where: {
-      jobId,
-      rewriteRisk: filters.risk,
-      sectionType: filters.sectionType,
-      ...(andFilters.length > 0 ? { AND: andFilters } : undefined),
-      ...(typeof filters.minScore === 'number' || typeof filters.maxScore === 'number'
-        ? {
-            score: {
-              ...(typeof filters.minScore === 'number' ? { gte: filters.minScore } : undefined),
-              ...(typeof filters.maxScore === 'number' ? { lte: filters.maxScore } : undefined)
-            }
+  if (filters.q) {
+    andFilters.push({
+      OR: [
+        { id: { contains: filters.q } },
+        { aBidder: { contains: filters.q } },
+        { bBidder: { contains: filters.q } },
+        { aSnippet: { contains: filters.q } },
+        { bSnippet: { contains: filters.q } }
+      ]
+    })
+  }
+  const rewriteRisk = filters.severity ?? filters.risk
+  return {
+    jobId,
+    rewriteRisk,
+    sectionType: filters.sectionType,
+    ...(andFilters.length > 0 ? { AND: andFilters } : undefined),
+    ...(typeof filters.minScore === 'number' || typeof filters.maxScore === 'number'
+      ? {
+          score: {
+            ...(typeof filters.minScore === 'number' ? { gte: filters.minScore } : undefined),
+            ...(typeof filters.maxScore === 'number' ? { lte: filters.maxScore } : undefined)
           }
-        : undefined)
-    }
+        }
+      : undefined)
+  }
+}
+
+export const listJobHits = async (jobId: string, filters: {
+  risk?: string
+  severity?: string
+  sectionType?: string
+  bidder?: string
+  docId?: string
+  minScore?: number
+  maxScore?: number
+  q?: string
+  page?: number
+  pageSize?: number
+}) => {
+  const page = filters.page && filters.page > 0 ? filters.page : 1
+  const pageSize = filters.pageSize && filters.pageSize > 0 ? Math.min(filters.pageSize, 100) : 20
+  const where = buildHitWhere(jobId, filters)
+  const [total, hits]: [
+    number,
+    {
+      id: string
+      aDocId: string
+      bDocId: string
+      score: number
+      rewriteRisk: string
+      ruleHits: unknown
+      sectionType: string
+      explanation: string
+      aBidder: string
+      aPage: number
+      aSnippet: string
+      bBidder: string
+      bPage: number
+      bSnippet: string
+      review: { result: string; remark: string | null; reviewedAt: string } | null
+    }[]
+  ] = await prisma.$transaction([
+    prisma.hit.count({ where }),
+    prisma.hit.findMany({
+      include: { review: true },
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize
+    })
+  ])
+  return {
+    items: hits.map((hit) => ({
+      hit_id: hit.id,
+      score: hit.score,
+      rewrite_risk: hit.rewriteRisk,
+      rule_hits: hit.ruleHits,
+      section_type: hit.sectionType,
+      explanation: hit.explanation,
+      a: { doc_id: hit.aDocId, bidder: hit.aBidder, page_hint: hit.aPage, snippet: hit.aSnippet },
+      b: { doc_id: hit.bDocId, bidder: hit.bBidder, page_hint: hit.bPage, snippet: hit.bSnippet },
+      review: hit.review
+        ? { result: hit.review.result, remark: hit.review.remark ?? undefined, reviewed_at: hit.review.reviewedAt }
+        : undefined
+    })),
+    total,
+    page,
+    page_size: pageSize
+  }
+}
+
+export const getJobHitSummary = async (jobId: string) => {
+  const grouped = await prisma.hit.groupBy({
+    by: ['rewriteRisk'],
+    where: { jobId },
+    _count: { _all: true }
   })
-  return hits.map((hit) => ({
+  const result = { high: 0, med: 0, low: 0, top_section: '技术方案' }
+  for (const row of grouped) {
+    if (row.rewriteRisk === 'HIGH') result.high = row._count._all
+    if (row.rewriteRisk === 'MED') result.med = row._count._all
+    if (row.rewriteRisk === 'LOW') result.low = row._count._all
+  }
+  return result
+}
+
+export const getHit = async (hitId: string) => {
+  const hit = await prisma.hit.findUnique({
+    where: { id: hitId },
+    include: { review: true }
+  })
+  if (!hit) return null
+  return {
     hit_id: hit.id,
     score: hit.score,
     rewrite_risk: hit.rewriteRisk,
@@ -213,12 +306,12 @@ export const listJobHits = async (jobId: string, filters: {
     review: hit.review
       ? { result: hit.review.result, remark: hit.review.remark ?? undefined, reviewed_at: hit.review.reviewedAt }
       : undefined
-  }))
+  }
 }
 
-export const getHit = async (hitId: string) => {
-  const hit = await prisma.hit.findUnique({
-    where: { id: hitId },
+export const getJobHit = async (jobId: string, hitId: string) => {
+  const hit = await prisma.hit.findFirst({
+    where: { id: hitId, jobId },
     include: { review: true }
   })
   if (!hit) return null
@@ -321,12 +414,10 @@ export const updatePairStats = async (jobId: string, stats: Map<string, { score:
   const pairs = await prisma.pair.findMany({ where: { jobId } })
   for (const pair of pairs) {
     const key = `${pair.docA}::${pair.docB}`
-    const payload = stats.get(key)
-    if (payload) {
-      await prisma.pair.update({
-        where: { id: pair.id },
-        data: { status: 'SUCCESS', score: payload.score, hits: payload.hits }
-      })
-    }
+    const payload = stats.get(key) ?? { score: 0, hits: 0 }
+    await prisma.pair.update({
+      where: { id: pair.id },
+      data: { status: 'SUCCESS', score: payload.score, hits: payload.hits }
+    })
   }
 }
