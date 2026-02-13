@@ -15,7 +15,7 @@ type HighlightRect = {
 type Props = {
   url: string
   page: number
-  highlights: number[][]
+  highlights: ({ x: number; y: number; w: number; h: number } | number[])[]
 }
 
 const props = defineProps<Props>()
@@ -60,17 +60,24 @@ const renderPage = async () => {
   await (page.render({ canvasContext: context, viewport } as any) as any).promise
   const w = viewport.width
   const h = viewport.height
-  const items = (props.highlights || []).filter(
-    (item) =>
-      Array.isArray(item) &&
-      item.length === 4 &&
-      item.every((value) => typeof value === 'number')
-  ) as number[][]
+  const items = (props.highlights || [])
+    .map((item) => {
+      if (Array.isArray(item) && item.length === 4 && item.every((value) => typeof value === 'number')) {
+        const [x1 = 0, y1 = 0, x2 = 0, y2 = 0] = item as number[]
+        return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 }
+      }
+      if (item && typeof item === 'object' && 'x' in item && 'y' in item && 'w' in item && 'h' in item) {
+        const box = item as { x: number; y: number; w: number; h: number }
+        return { x: box.x, y: box.y, w: box.w, h: box.h }
+      }
+      return null
+    })
+    .filter(Boolean) as { x: number; y: number; w: number; h: number }[]
   highlightRects.value = items.map((item) => ({
-    left: item[0]! * w,
-    top: item[1]! * h,
-    width: (item[2]! - item[0]!) * w,
-    height: (item[3]! - item[1]!) * h
+    left: item.x * w,
+    top: item.y * h,
+    width: item.w * w,
+    height: item.h * h
   }))
   rendering.value = false
 }

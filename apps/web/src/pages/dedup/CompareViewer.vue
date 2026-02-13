@@ -6,7 +6,7 @@ import { http } from '../../api/http'
 
 type AnchorSide = {
   page: number
-  bbox_list: number[][]
+  bbox_list: { x: number; y: number; w: number; h: number }[]
   snippet?: string
 }
 

@@ -189,9 +189,6 @@ export const listAnchors = async (hitId: string) => {
     if (Array.isArray(input)) {
       return input
         .map((item) => {
-          if (Array.isArray(item) && item.length === 4) {
-            return item
-          }
           if (
             item &&
             typeof item === 'object' &&
@@ -201,11 +198,15 @@ export const listAnchors = async (hitId: string) => {
             'h' in item
           ) {
             const box = item as { x: number; y: number; w: number; h: number }
-            return [box.x, box.y, box.x + box.w, box.y + box.h]
+            return { x: box.x, y: box.y, w: box.w, h: box.h }
+          }
+          if (Array.isArray(item) && item.length === 4 && item.every((value) => typeof value === 'number')) {
+            const [x1, y1, x2, y2] = item as number[]
+            return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 }
           }
           return null
         })
-        .filter(Boolean) as number[][]
+        .filter(Boolean) as { x: number; y: number; w: number; h: number }[]
     }
     return []
   }

@@ -1,27 +1,16 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import SectionList from '../pages/section/SectionList.vue'
-import SectionDetail from '../pages/section/SectionDetail.vue'
-import JobList from '../pages/dedup/JobList.vue'
-import JobDetail from '../pages/dedup/JobDetail.vue'
-import ReportOverview from '../pages/dedup/ReportOverview.vue'
-import CompareViewer from '../pages/dedup/CompareViewer.vue'
-import ProviderConfig from '../pages/config/ProviderConfig.vue'
-import PromptConfig from '../pages/config/PromptConfig.vue'
-import RuleThresholdConfig from '../pages/config/RuleThresholdConfig.vue'
-import InvokeLog from '../pages/audit/InvokeLog.vue'
-
 const routes = [
   { path: '/', redirect: '/sections' },
-  { path: '/sections', component: SectionList },
-  { path: '/sections/:id', component: SectionDetail },
-  { path: '/dedup/jobs', component: JobList },
-  { path: '/dedup/jobs/:jobId', component: JobDetail },
-  { path: '/dedup/reports/:reportId', component: ReportOverview },
-  { path: '/dedup/compare/:hitId', component: CompareViewer },
-  { path: '/config/providers', component: ProviderConfig, meta: { role: 'admin' } },
-  { path: '/config/prompts', component: PromptConfig, meta: { role: 'admin' } },
-  { path: '/config/rules', component: RuleThresholdConfig, meta: { role: 'admin' } },
-  { path: '/audit/invoke-log', component: InvokeLog, meta: { role: 'admin' } }
+  { path: '/sections', component: () => import('../pages/section/SectionList.vue') },
+  { path: '/sections/:id', component: () => import('../pages/section/SectionDetail.vue') },
+  { path: '/dedup/jobs', component: () => import('../pages/dedup/JobList.vue') },
+  { path: '/dedup/jobs/:jobId', component: () => import('../pages/dedup/JobDetail.vue') },
+  { path: '/dedup/reports/:reportId', component: () => import('../pages/dedup/ReportOverview.vue') },
+  { path: '/dedup/compare/:hitId', component: () => import('../pages/dedup/CompareViewer.vue') },
+  { path: '/config/providers', component: () => import('../pages/config/ProviderConfig.vue'), meta: { role: 'admin' } },
+  { path: '/config/prompts', component: () => import('../pages/config/PromptConfig.vue'), meta: { role: 'admin' } },
+  { path: '/config/rules', component: () => import('../pages/config/RuleThresholdConfig.vue'), meta: { role: 'admin' } },
+  { path: '/audit/invoke-log', component: () => import('../pages/audit/InvokeLog.vue'), meta: { role: 'admin' } }
 ]
 
 export const router = createRouter({
