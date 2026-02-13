@@ -1,0 +1,59 @@
+:root {
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #1f2a37;
+  background-color: #f5f7fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background-color: #f5f7fb;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.app-shell {
+  min-height: 100vh;
+  background: #f5f7fb;
+}
+
+.app-aside {
+  background: #0f172a;
+  color: #f8fafc;
+  border-right: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.brand {
+  font-size: 18px;
+  font-weight: 600;
+  padding: 20px 16px 8px;
+}
+
+.menu {
+  border-right: none;
+  background: transparent;
+}
+
+.app-header {
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  height: 56px;
+}
+
+.app-main {
+  padding: 16px 24px 32px;
+}
